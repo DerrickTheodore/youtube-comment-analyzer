@@ -1,0 +1,7 @@
+{
+  "extends": "@parcel/config-default",
+  "transformers": {
+    "*.{html,wasm,png,json}": ["@parcel/transformer-raw"],
+    "*.{js,jsx}": ["@parcel/transformer-react-refresh-wrap", "@parcel/transformer-js"]
+  }
+}
