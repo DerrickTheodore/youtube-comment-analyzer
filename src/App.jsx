@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
+import SQLEditor from "./components/SQLEditor";
 import initSqlJs from "sql.js";
 
 // Load environment variables from .env file
@@ -139,20 +140,16 @@ function App() {
     }
   };
 
+  const handleQueryChange = useCallback((value) => {
+    console.log("Setting query to", value);
+    setQuery(value);
+  }, []);
+
   return (
     <div>
       <h1>YouTube Comment Analyzer</h1>
-      <textarea
-        id="query"
-        placeholder="Enter SQL query (e.g., SELECT * FROM comments WHERE likeCount > 10)"
-        value={query}
-        onChange={(e) => {
-          const value = e.target.value;
-          console.log("Setting query to", value);
-
-          setQuery(e.target.value);
-        }}
-      />
+      <SQLEditor onChange={handleQueryChange} />
+      <br />
       <button id="executeButton" onClick={handleExecuteQuery}>
         Execute Query
       </button>

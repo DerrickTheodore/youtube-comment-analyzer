@@ -3,6 +3,11 @@
     "build": "parcel build src/**/*.{js,wasm,json,html,png,jsx} src/popup.js src/background.js src/sql-wasm.js --dist-dir dist"
   },
   "dependencies": {
+    "@codemirror/autocomplete": "^6.18.6",
+    "@codemirror/lang-sql": "^6.8.0",
+    "@codemirror/lint": "^6.8.4",
+    "@codemirror/theme-one-dark": "^6.1.2",
+    "codemirror": "^6.0.1",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "sql.js": "^1.13.0"
