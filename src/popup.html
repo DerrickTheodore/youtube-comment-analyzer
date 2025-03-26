@@ -3,42 +3,202 @@
 <head>
   <title>YouTube Comment Analyzer</title>
   <style>
+    :root {
+      /* Light mode colors */
+      --bg-color: #ffffff;
+      --text-color: #030303;
+      --card-bg: #ffffff;
+      --card-hover: #f9f9f9;
+      --border-color: #e0e0e0;
+      --header-border: #e0e0e0;
+      --error-bg: #ffebee;
+      --error-border: #d32f2f;
+      --error-text: #d32f2f;
+      --stats-color: #606060;
+      --youtube-red: #ff0000;
+      --youtube-red-hover: #cc0000;
+      --youtube-blue: #065fd4;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        /* Dark mode colors */
+        --bg-color: #0f0f0f;
+        --text-color: #f1f1f1;
+        --card-bg: #272727;
+        --card-hover: #3d3d3d;
+        --border-color: #3d3d3d;
+        --header-border: #3d3d3d;
+        --error-bg: #3c0a0a;
+        --error-border: #d32f2f;
+        --error-text: #f88;
+        --stats-color: #aaa;
+        --youtube-red: #ff4e45;
+        --youtube-red-hover: #ff2d21;
+        --youtube-blue: #3ea6ff;
+      }
+    }
+
     body {
+      font-family: 'Roboto', 'Arial', sans-serif;
       width: 400px;
-      padding: 10px;
-      font-family: Arial, sans-serif;
+      height: 600px;
+      margin: 0;
+      padding: 0;
+      color: var(--text-color);
+      background-color: var(--bg-color);
     }
-    #loading {
-      display: block;
-      text-align: center;
-      font-size: 14px;
-      color: #555;
+
+    .container {
+      max-width: 100%;
+      padding: 20px;
+      box-sizing: border-box;
     }
-    #comments {
-      margin-top: 10px;
+
+    h1 {
+      color: var(--youtube-red);
+      font-size: 24px;
+      margin-bottom: 20px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid var(--header-border);
     }
-    .comment {
-      margin-bottom: 10px;
-      padding: 8px;
-      border: 1px solid #ddd;
-      border-radius: 4px;
-      background-color: #f9f9f9;
-    }
-    #query {
-      width: 100%;
-      height: 100px;
-      margin-bottom: 10px;
-      padding: 5px;
-      font-family: monospace;
-    }
-    #executeButton {
-      width: 100%;
-      padding: 5px;
-      background-color: #007bff;
+
+    .execute-btn {
+      background-color: var(--youtube-red);
       color: white;
       border: none;
+      padding: 10px 20px;
+      font-size: 14px;
+      font-weight: 500;
       border-radius: 4px;
       cursor: pointer;
+      transition: background-color 0.2s;
+      margin-top: 10px;
+    }
+
+    .execute-btn:hover {
+      background-color: var(--youtube-red-hover);
+    }
+
+    .execute-btn:disabled {
+      background-color: #606060;
+      cursor: not-allowed;
+    }
+
+    .loading {
+      color: var(--stats-color);
+      font-size: 14px;
+      margin: 15px 0;
+      display: flex;
+      align-items: center;
+    }
+
+    .loading::before {
+      content: "";
+      display: inline-block;
+      width: 16px;
+      height: 16px;
+      margin-right: 8px;
+      border: 3px solid rgba(255, 78, 69, 0.2);
+      border-radius: 50%;
+      border-top-color: var(--youtube-red);
+      animation: spin 1s ease-in-out infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .error {
+      color: var(--error-text);
+      background-color: var(--error-bg);
+      padding: 12px;
+      border-radius: 4px;
+      margin: 15px 0;
+      font-size: 14px;
+      border-left: 4px solid var(--error-border);
+    }
+
+    .comments-container {
+      margin-top: 20px;
+      max-height: 400px;
+      overflow-y: auto;
+      border: 1px solid var(--border-color);
+      border-radius: 4px;
+    }
+
+    .comment-card {
+      padding: 15px;
+      background-color: var(--card-bg);
+      border-bottom: 1px solid var(--border-color);
+      transition: background-color 0.2s;
+    }
+
+    .comment-card:last-child {
+      border-bottom: none;
+    }
+
+    .comment-card:hover {
+      background-color: var(--card-hover);
+    }
+
+    .comment-card h3 {
+      margin: 0 0 8px 0;
+      color: var(--youtube-blue);
+      font-size: 15px;
+    }
+
+    .comment-card p {
+      margin: 0 0 10px 0;
+      font-size: 14px;
+      line-height: 1.5;
+      color: var(--text-color);
+    }
+
+    .comment-stats {
+      display: flex;
+      gap: 15px;
+      font-size: 13px;
+      color: var(--stats-color);
+    }
+
+    .comments-container::-webkit-scrollbar {
+      width: 8px;
+    }
+
+    .comments-container::-webkit-scrollbar-track {
+      background: var(--bg-color);
+      border-radius: 4px;
+    }
+
+    .comments-container::-webkit-scrollbar-thumb {
+      background: var(--youtube-red);
+      border-radius: 4px;
+    }
+
+    .comments-container::-webkit-scrollbar-thumb:hover {
+      background: var(--youtube-red-hover);
+    }
+
+    @media (max-width: 600px) {
+      .container {
+        padding: 15px;
+      }
+      h1 {
+        font-size: 20px;
+      }
+      .comment-card {
+        padding: 12px;
+      }
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .comment-card {
+      animation: fadeIn 0.3s ease-out forwards;
     }
   </style>
 </head>
