@@ -9,13 +9,13 @@
         "scripting",
         "tabs"
     ],
-    
     "host_permissions": [
         "https://www.youtube.com/*" ,
         "https://www.googleapis.com/youtube/v3/*"
       ],
     "background": {
-        "service_worker": "background.js"
+        "service_worker": "background.js",
+        "type": "module"
     },
     "content_security_policy": {
       "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'"
