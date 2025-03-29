@@ -14,6 +14,7 @@ function App() {
       if (request.action === "VIDEO_VIEWED") {
         try {
           const { videoId } = request.payload;
+          console.log("App() => Video viewed:", videoId);
           setEnableUI(videoId);
         } catch (err) {
           console.error("Error handling video change:", err);

@@ -45,7 +45,7 @@ async function fetchComments(videoId) {
     if (!isInitialized) throw new Error("Database not initialized");
 
     const apiKey = process.env.YOUTUBE_API_KEY;
-    const url = `https://www.googleapis.com/youtube/v3/commentThreads?part=snippet&videoId=${videoId}&key=${apiKey}&maxResults=100`;
+    const url = `https://www.googleapis.com/youtube/v3/commentThreads?part=snippet&part=replies&videoId=${videoId}&key=${apiKey}&maxResults=100`;
 
     const response = await fetch(url);
     if (!response.ok) {
@@ -53,6 +53,10 @@ async function fetchComments(videoId) {
     }
 
     const data = await response.json();
+    const preInsertCommentCount = db.exec("SELECT COUNT(id) FROM comments");
+    console.log(
+      `Comment count before insert: ${preInsertCommentCount[0].values[0][0]}`
+    );
 
     // Begin transaction for batch insert
     db.exec("BEGIN TRANSACTION");
@@ -76,6 +80,10 @@ async function fetchComments(videoId) {
       });
 
       db.exec("COMMIT");
+      const postInsertCommentCount = db.exec("SELECT COUNT(id) FROM comments");
+      console.log(
+        `Comment count after insert: ${postInsertCommentCount[0].values[0][0]}`
+      );
       console.log(`Inserted ${data.items.length} comments`);
       return { success: true, count: data.items.length };
     } catch (insertError) {
@@ -134,18 +142,17 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                     if (!isInitialized) {
                       await initDatabase();
                     }
-
                     await fetchComments(currentVideoId);
-
-                    // Notify all extension components about the change
-                    chrome.runtime.sendMessage({
-                      action: "VIDEO_VIEWED",
-                      payload: {
-                        videoId,
-                        timestamp: Date.now(),
-                      },
-                    });
                   }
+
+                  // Notify all extension components about the change
+                  chrome.runtime.sendMessage({
+                    action: "VIDEO_VIEWED",
+                    payload: {
+                      videoId,
+                      timestamp: Date.now(),
+                    },
+                  });
                 } catch (error) {
                   console.error("Error handling tab update:", error);
                 }

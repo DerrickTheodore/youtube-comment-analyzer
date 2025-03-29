@@ -1,6 +1,6 @@
 {
   "scripts": {
-    "build": "parcel build src/**/*.{js,wasm,json,html,png,jsx} src/popup.js src/background.js src/sql-wasm.js --dist-dir dist"
+    "build": "parcel build src/**/*.{js,wasm,json,html,png,jsx} src/popup.js src/background.js --dist-dir dist"
   },
   "dependencies": {
     "@codemirror/autocomplete": "^6.18.6",
