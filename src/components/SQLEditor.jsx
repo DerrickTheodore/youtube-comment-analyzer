@@ -46,7 +46,7 @@ function SQLEditor({ onChange }) {
     return () => editor.destroy();
   }, [onChange]);
 
-  return <div ref={editorRef} style={{ height: "100%" }} />;
+  return <div ref={editorRef} />;
 }
 
 export default SQLEditor;

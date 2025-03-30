@@ -1,10 +1,14 @@
-// background.js
 import initSqlJs from "sql.js";
 
 // Database and state management
 let db = null;
 let currentVideoId = null;
 let isInitialized = false;
+
+// Request queue management
+let isProcessing = false;
+let pendingRequest = null;
+const PROCESSING_TIMEOUT = 30000; // 30 seconds timeout
 
 // Initialize SQLite database
 async function initDatabase() {
@@ -25,7 +29,8 @@ async function initDatabase() {
         textOriginal TEXT,
         likeCount INTEGER,
         totalReplyCount INTEGER,
-        publishedAt TEXT
+        publishedAt TEXT,
+        authorProfileImageUrl TEXT
       );
     `);
 
@@ -69,13 +74,14 @@ async function fetchComments(videoId) {
           totalReplyCount: item.snippet.totalReplyCount,
         };
 
-        db.run(`INSERT OR IGNORE INTO comments VALUES (?, ?, ?, ?, ?, ?)`, [
+        db.run(`INSERT OR IGNORE INTO comments VALUES (?, ?, ?, ?, ?, ?, ?)`, [
           comment.id,
           comment.authorDisplayName,
           comment.textOriginal,
           comment.likeCount,
           comment.totalReplyCount,
           comment.publishedAt,
+          comment.authorProfileImageUrl,
         ]);
       });
 
@@ -96,7 +102,6 @@ async function fetchComments(videoId) {
   }
 }
 
-// Execute SQL query against the database
 function executeQuery(query) {
   if (!isInitialized) throw new Error("Database not initialized");
   if (!query || typeof query !== "string") throw new Error("Invalid query");
@@ -113,76 +118,115 @@ function executeQuery(query) {
   }
 }
 
-// Main message handler
-chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+function processPending() {
+  if (pendingRequest) {
+    const { request, sendResponse, timer } = pendingRequest;
+    clearTimeout(timer);
+    pendingRequest = null;
+    handleRequest(request, sendResponse);
+  } else {
+    isProcessing = false;
+  }
+}
+
+// Main request handler
+async function handleRequest(request, sendResponse) {
   const { action, payload } = request;
+  const timer = setTimeout(() => {
+    sendResponse({ status: "TIMEOUT" });
+    isProcessing = false;
+    processPending();
+  }, PROCESSING_TIMEOUT);
 
-  const handleAsync = async () => {
-    try {
-      switch (action) {
-        case "EXECUTE_QUERY":
-          if (!payload?.query) throw new Error("No query provided");
-          const results = executeQuery(payload.query);
-          sendResponse({ status: "SUCCESS", results });
-          break;
+  try {
+    switch (action) {
+      case "EXECUTE_QUERY":
+        if (!payload?.query) throw new Error("No query provided");
+        const results = executeQuery(payload.query);
+        clearTimeout(timer);
+        sendResponse({ status: "SUCCESS", results });
+        break;
 
-        case "POPUP_OPENED":
-          console.log("Popup opened");
-          chrome.tabs.query(
-            { active: true, currentWindow: true },
-            async ([tab]) => {
+      case "POPUP_OPENED":
+        console.log("Popup opened");
+        chrome.tabs.query(
+          { active: true, currentWindow: true },
+          async ([tab]) => {
+            try {
               if (tab.active && tab.url.includes("youtube.com/watch")) {
-                try {
-                  const url = new URL(tab.url);
-                  const videoId = url.searchParams.get("v");
+                const url = new URL(tab.url);
+                const videoId = url.searchParams.get("v");
 
-                  if (videoId && videoId !== currentVideoId) {
-                    currentVideoId = videoId;
+                if (videoId && videoId !== currentVideoId) {
+                  currentVideoId = videoId;
 
-                    if (!isInitialized) {
-                      await initDatabase();
-                    }
-                    await fetchComments(currentVideoId);
+                  if (!isInitialized) {
+                    await initDatabase();
                   }
-
-                  // Notify all extension components about the change
-                  chrome.runtime.sendMessage({
-                    action: "VIDEO_VIEWED",
-                    payload: {
-                      videoId,
-                      timestamp: Date.now(),
-                    },
-                  });
-                } catch (error) {
-                  console.error("Error handling tab update:", error);
+                  await fetchComments(currentVideoId);
                 }
+
+                chrome.runtime.sendMessage({
+                  action: "VIDEO_VIEWED",
+                  payload: { videoId, timestamp: Date.now() },
+                });
               }
+            } catch (error) {
+              console.error("Error handling tab update:", error);
             }
-          );
-          break;
+          }
+        );
+        clearTimeout(timer);
+        sendResponse({ status: "SUCCESS" });
+        break;
 
-        case "POPUP_CLOSED":
-          console.log("Popup closed");
-          break;
+      case "POPUP_CLOSED":
+        console.log("Popup closed");
+        clearTimeout(timer);
+        sendResponse({ status: "SUCCESS" });
+        break;
 
-        default:
-          throw new Error(`Unknown action: ${action}`);
-      }
-    } catch (error) {
-      console.error(`Error handling ${action}:`, error);
-      sendResponse({
-        status: "ERROR",
-        error: error.message,
-        action: action,
-      });
+      default:
+        throw new Error(`Unknown action: ${action}`);
     }
-  };
+  } catch (error) {
+    console.error(`Error handling ${action}:`, error);
+    clearTimeout(timer);
+    sendResponse({
+      status: "ERROR",
+      error: error.message,
+      action: action,
+    });
+  } finally {
+    processPending();
+  }
+}
 
-  handleAsync();
-  return true; // Required for async sendResponse
+// Message listener with request queueing
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  if (
+    request.action === "EXECUTE_QUERY" ||
+    request.action === "POPUP_OPENED" ||
+    request.action === "POPUP_CLOSED"
+  ) {
+    if (isProcessing) {
+      // Cancel previous pending request if exists
+      if (pendingRequest) {
+        clearTimeout(pendingRequest.timer);
+      }
+      // Queue the latest request
+      pendingRequest = { request, sendResponse };
+      return true;
+    }
+
+    isProcessing = true;
+    handleRequest(request, sendResponse);
+    return true;
+  }
+  return false;
 });
 
-// Enhanced tab monitoring
+// Tab monitoring (independent of request queue)
 chrome.tabs.onUpdated.addListener(async (_tabId, _changeInfo, tab) => {
   if (tab.active && tab.url.includes("youtube.com/watch")) {
     try {
@@ -198,13 +242,9 @@ chrome.tabs.onUpdated.addListener(async (_tabId, _changeInfo, tab) => {
 
         await fetchComments(currentVideoId);
 
-        // Notify all extension components about the change
         chrome.runtime.sendMessage({
           action: "VIDEO_VIEWED",
-          payload: {
-            videoId,
-            timestamp: Date.now(),
-          },
+          payload: { videoId, timestamp: Date.now() },
         });
       }
     } catch (error) {
@@ -213,7 +253,7 @@ chrome.tabs.onUpdated.addListener(async (_tabId, _changeInfo, tab) => {
   }
 });
 
-// Add this to initialization
+// Initialization
 (async function initialize() {
   try {
     console.log("Background initialized successfully");
