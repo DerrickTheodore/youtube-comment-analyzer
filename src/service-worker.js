@@ -202,6 +202,10 @@ async function handleRequest(request, sendResponse) {
   }
 }
 
+chrome.sidePanel
+  .setPanelBehavior({ openPanelOnActionClick: true })
+  .catch((error) => console.error(error));
+
 // Message listener with request queueing
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (
@@ -227,7 +231,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 });
 
 // Tab monitoring (independent of request queue)
-chrome.tabs.onUpdated.addListener(async (_tabId, _changeInfo, tab) => {
+chrome.tabs.onUpdated.addListener(async (tabId, _changeInfo, tab) => {
   if (tab.active && tab.url.includes("youtube.com/watch")) {
     try {
       const url = new URL(tab.url);
@@ -242,7 +246,7 @@ chrome.tabs.onUpdated.addListener(async (_tabId, _changeInfo, tab) => {
 
         await fetchComments(currentVideoId);
 
-        chrome.runtime.sendMessage({
+        await chrome.runtime.sendMessage({
           action: "VIDEO_VIEWED",
           payload: { videoId, timestamp: Date.now() },
         });
@@ -253,12 +257,10 @@ chrome.tabs.onUpdated.addListener(async (_tabId, _changeInfo, tab) => {
   }
 });
 
-// Initialization
-(async function initialize() {
+chrome.runtime.onInstalled.addListener(async () => {
   try {
-    console.log("Background initialized successfully");
     if (!isInitialized) await initDatabase();
   } catch (error) {
-    console.error("Background initialization failed:", error);
+    console.error("Service worker initialization failed:", error);
   }
-})();
+});

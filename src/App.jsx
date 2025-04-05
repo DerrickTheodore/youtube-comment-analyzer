@@ -107,77 +107,70 @@ function App() {
     });
   };
 
-  console.log("STATE UPDATED IN APP", {
-    query,
-    comments,
-    loading,
-    error,
-    enableUI,
-    executionStateCurrent: executionStateRef.current,
-  });
-
   return (
-    <div className="youtube-comments-container">
-      <h1>YouTube Comment Analyzer</h1>
-      <SQLEditor onChange={handleQueryChange} />
-      <button
-        onClick={handleExecuteQuery}
-        disabled={!enableUI || executionStateRef.current.isExecuting}
-        className="execute-btn"
-      >
-        {executionStateRef.current.isExecuting
-          ? "Processing..."
-          : "Execute Query"}
-      </button>
+    <div className="app-container">
+      <div className="youtube-comments-container">
+        <h1>YouTube Comment Analyzer</h1>
+        <SQLEditor onChange={handleQueryChange} />
+        <button
+          onClick={handleExecuteQuery}
+          disabled={!enableUI || executionStateRef.current.isExecuting}
+          className="execute-btn"
+        >
+          {executionStateRef.current.isExecuting
+            ? "Processing..."
+            : "Execute Query"}
+        </button>
 
-      {loading && <div className="loading">Loading comments...</div>}
-      {error && <div className="error">Error: {error}</div>}
+        {loading && <div className="loading">Loading comments...</div>}
+        {error && <div className="error">Error: {error}</div>}
 
-      <div className="comments-list">
-        {comments.map((comment) => (
-          <div key={comment.id} className="comment-thread">
-            <div className="comment">
-              <div className="comment-avatar">
-                <img
-                  src={comment.authorProfileImageUrl || "default-avatar.png"}
-                  loading="lazy"
-                  alt={`${comment.authorDisplayName}'s avatar`}
-                  className="avatar-img"
-                  onError={(e) => {
-                    e.target.onerror = null;
-                    e.target.src = chrome.runtime.getURL(
-                      "assets/default-avatar.png"
-                    );
-                  }}
-                />
-              </div>
-              <div className="comment-content">
-                <div className="comment-header">
-                  <span className="comment-author">
-                    {comment.authorDisplayName}
-                  </span>
-                  <span className="comment-time">
-                    {formatDate(comment.publishedAt)}
-                  </span>
-                </div>
-                <div className="comment-text">{comment.textOriginal}</div>
-                <div className="comment-actions">
+        <div className="comments-list">
+          {comments.map((comment) => (
+            <div key={comment.id} className="comment-thread">
+              <div className="comment">
+                <div className="comment-avatar">
                   <img
-                    src="assets/thumbs-up.png"
-                    alt="Like"
-                    className="like-icon"
+                    src={comment.authorProfileImageUrl || "default-avatar.png"}
+                    loading="lazy"
+                    alt={`${comment.authorDisplayName}'s avatar`}
+                    className="avatar-img"
+                    onError={(e) => {
+                      e.target.onerror = null;
+                      e.target.src = chrome.runtime.getURL(
+                        "assets/default-avatar.png"
+                      );
+                    }}
                   />
-                  <span className="like-count">{comment.likeCount}</span>
-                  {comment.totalReplyCount > 0 && (
-                    <button className="view-replies-btn">
-                      View replies ({comment.totalReplyCount})
-                    </button>
-                  )}
+                </div>
+                <div className="comment-content">
+                  <div className="comment-header">
+                    <span className="comment-author">
+                      {comment.authorDisplayName}
+                    </span>
+                    <span className="comment-time">
+                      {formatDate(comment.publishedAt)}
+                    </span>
+                  </div>
+                  <div className="comment-text">{comment.textOriginal}</div>
+                  <div className="comment-actions">
+                    <img
+                      src="assets/thumbs-up.png"
+                      alt="Like"
+                      className="like-icon"
+                    />
+                    <span className="like-count">{comment.likeCount}</span>
+                    {comment.totalReplyCount > 0 && (
+                      <button className="view-replies-btn">
+                        View replies ({comment.totalReplyCount})
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-        ))}
+          ))}
+        </div>
       </div>
     </div>
   );

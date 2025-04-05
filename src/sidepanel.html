@@ -113,11 +113,21 @@
         }
       }
 
+      .app-container {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        height: 100vh;
+        background-color: var(--bg-color);
+      }
+
       .youtube-comments-container {
         font-family: "Roboto", "Arial", sans-serif;
-        width: 400px;
-        height: 600px;
         padding: 16px;
+        max-width: 600px;
+        height: 100%;
+        min-height: 400px;
         color: var(--text-color);
         background-color: var(--bg-color);
         overflow-y: auto;
@@ -358,30 +368,10 @@
       .comment-thread {
         animation: fadeIn 0.3s ease-out forwards;
       }
-
-      /* Responsive adjustments */
-      @media (max-width: 600px) {
-        .youtube-comments-container {
-          padding: 12px;
-          width: 350px;
-        }
-
-        h1 {
-          font-size: 20px;
-        }
-
-        .comment {
-          padding: 8px 0;
-        }
-
-        .comment-avatar {
-          margin-right: 12px;
-        }
-      }
     </style>
   </head>
   <body>
     <div id="root"></div>
-    <script src="popup.js"></script>
+    <script src="sidepanel.js"></script>
   </body>
 </html>
