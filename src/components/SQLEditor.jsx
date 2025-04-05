@@ -46,7 +46,7 @@ function SQLEditor({ onChange }) {
     return () => editor.destroy();
   }, [onChange]);
 
-  return <div ref={editorRef} />;
+  return <div id="sql-editor" ref={editorRef} />;
 }
 
 export default SQLEditor;
