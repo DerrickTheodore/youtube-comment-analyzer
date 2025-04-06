@@ -2,13 +2,20 @@ import React from "react";
 import { createRoot } from "react-dom/client";
 import App from "./App";
 
-document.addEventListener("DOMContentLoaded", () => {
-  console.log("DOM fully loaded and parsed");
-  chrome.runtime.sendMessage({ action: "POPUP_OPENED" });
-});
+const handleSidePanelMessages = (request, _sender, sendResponse) => {
+  try {
+    if (request.action === "CLOSE_SIDE_PANEL") {
+      window.close();
+    }
+  } catch (err) {
+    console.error("Error handling side panel close:", err);
+  }
+};
+
+chrome.runtime.onMessage.addListener(handleSidePanelMessages);
 
 window.addEventListener("beforeunload", () => {
-  chrome.runtime.sendMessage({ action: "POPUP_CLOSED" });
+  chrome.runtime.onMessage.removeListener(handleSidePanelMessages);
 });
 
 // Render the React component
