@@ -17,7 +17,6 @@ function App() {
       if (request.action === "VIDEO_VIEWED") {
         try {
           const { videoId } = request.payload;
-          console.log("App() => Video viewed:", videoId);
           setEnableUI(videoId);
           setComments([]);
           setError(null);
