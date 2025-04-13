@@ -1,6 +1,10 @@
 {
+  "type": "module",
+  "name": "youtube-comment-analyzer",
+  "version": "0.1.0",
+  "description": "Fetches and enhances YouTube comments.",
   "scripts": {
-    "build": "parcel build src/**/*.{js,wasm,json,html,png,jsx} src/sidepanel.js src/service-worker.js --dist-dir dist"
+    "build": "rm -rf dist && node build.js"
   },
   "dependencies": {
     "@codemirror/autocomplete": "^6.18.6",
@@ -8,6 +12,7 @@
     "@codemirror/lint": "^6.8.4",
     "@codemirror/theme-one-dark": "^6.1.2",
     "codemirror": "^6.0.1",
+    "dotenv": "^16.5.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "sql.js": "^1.13.0"
@@ -19,6 +24,7 @@
     "buffer": "^6.0.3",
     "crypto-browserify": "^3.12.1",
     "events": "^3.3.0",
+    "fast-glob": "^3.3.3",
     "os-browserify": "^0.3.0",
     "parcel": "^2.14.1",
     "path-browserify": "^1.0.1",

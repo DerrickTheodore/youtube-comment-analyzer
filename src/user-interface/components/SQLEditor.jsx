@@ -6,7 +6,7 @@ import { autocompletion } from "@codemirror/autocomplete";
 import { keymap } from "@codemirror/view";
 import { indentWithTab } from "@codemirror/commands";
 
-function SQLEditor({ onChange }) {
+function SQLEditor({ value = "", onChange }) {
   const editorRef = useRef(null);
 
   useEffect(() => {
@@ -22,7 +22,7 @@ function SQLEditor({ onChange }) {
     };
 
     const editor = new EditorView({
-      doc: "",
+      doc: value,
       extensions: [
         basicSetup,
         keymap.of([indentWithTab]),
@@ -33,18 +33,21 @@ function SQLEditor({ onChange }) {
           defaultTable: "comments",
         }),
         autocompletion(),
-        oneDark,
         EditorView.updateListener.of((update) => {
           if (update.docChanged) {
             onChange(update.state.doc.toString());
           }
         }),
+        oneDark,
       ],
       parent: editorRef.current,
     });
 
+    editor.dom.style.fontSize = "12px";
+    editor.dom.style.lineHeight = "1";
+
     return () => editor.destroy();
-  }, [onChange]);
+  }, [onChange]); // Removed `value` from the dependency array
 
   return <div id="sql-editor" ref={editorRef} />;
 }
