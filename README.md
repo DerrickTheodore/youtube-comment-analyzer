@@ -1,11 +1,10 @@
-
 # YouTube Comment Analyzer - Chrome Extension
 
 A Chrome browser extension that fetches comments from YouTube videos using the YouTube Data API and provides a SQL editor to analyze them.
 
 ---
 
-![Screenshot](WIP-prototype-image.png)
+![Screenshot](readme-assets/WIP-prototype-image.png)
 
 ---
 
