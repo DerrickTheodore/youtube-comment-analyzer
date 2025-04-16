@@ -28,6 +28,10 @@
       "128": "images/icon128.png"
     }
   },
+  "side_panel": {
+    "default_path": "src/user-interface/index/sidepanel.html",
+    "open_panel_action": "icon_click"
+  },
   "icons": {
     "16": "images/icon16.png",
     "48": "images/icon48.png",

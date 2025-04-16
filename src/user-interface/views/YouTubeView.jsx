@@ -8,68 +8,75 @@ function YouTubeView() {
   const [comments, setComments] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [enableUI, setEnableUI] = useState(false);
+  const [enableUI, setEnableUI] = useState(true);
   const executionStateRef = useRef({
     isExecuting: false,
-    lastRequestId: 0,
   });
 
   useEffect(() => {
     // Define listener handlers
-    const handleDataFetch = async (changes, areaName) => {
-      if (areaName === "local" && changes.tabsDataFetch) {
-        const storedTabsDataFetch = changes.tabsDataFetch.newValue;
-        const [{ id: storedTabsDataFetchKey }] = await chrome.tabs.query({
-          active: true,
-          currentWindow: true,
-        });
-        const dataFetch =
-          storedTabsDataFetch[storedTabsDataFetchKey.toString()];
-
-        if (dataFetch === "loading") {
-          setLoading(true);
-        } else if (dataFetch === "done") {
-          setLoading(false);
-          setEnableUI(true);
-          setComments([]);
-        } else {
-          setLoading(false);
-          setEnableUI(false);
-          setComments([]);
-          setError("Error fetching data");
-        }
-      }
-    };
-
-    const handleQueryFetchResults = async (request, sender, sendResponse) => {
+    const handleDataFetch = async (request, _sender, sendResponse) => {
       const { action, payload } = request;
-      const [{ id: currentTabId }] = await chrome.tabs.query({
-        active: true,
-        currentWindow: true,
-      });
-
-      if (action === "QUERY_RESULT" && payload?.tabId === currentTabId) {
-        const transformComments = (results) => {
-          return results.flatMap((result) => {
+      if (action === "DATA_FETCH_LOADING") {
+        setLoading(true);
+        setEnableUI(false);
+        sendResponse({
+          status: "success",
+          message: `Received action: ${action}`,
+        });
+      } else if (action === "DATA_FETCH_DONE") {
+        setLoading(false);
+        setEnableUI(true);
+        setComments(
+          payload.results.flatMap((result) => {
             return result.values.map((row) => {
               return result.columns.reduce((acc, col, i) => {
                 acc[col] = row[i];
                 return acc;
               }, {});
             });
-          });
-        };
-
+          })
+        );
+        sendResponse({
+          status: "success",
+          message: `Received action: ${action}`,
+        });
+      } else if (action === "DATA_FETCH_ERROR") {
         setLoading(false);
+        setEnableUI(true);
+        setComments([]);
+        setError("Error fetching data");
+        sendResponse({
+          status: "success",
+          message: `Received action: ${action}`,
+        });
+      }
+    };
+    const handleQueryFetchResults = async (request, _sender, sendResponse) => {
+      const { action, payload } = request;
+      if (action === "QUERY_RESULT") {
         executionStateRef.current.isExecuting = false;
-        setComments(transformComments(payload.results));
-        sendResponse({ status: "success" });
+        setLoading(false);
+        setComments(
+          payload.results.flatMap((result) => {
+            return result.values.map((row) => {
+              return result.columns.reduce((acc, col, i) => {
+                acc[col] = row[i];
+                return acc;
+              }, {});
+            });
+          })
+        );
+        sendResponse({
+          status: "success",
+          message: `Received action: ${action}`,
+        });
       }
       return true; // Keep the message channel open for sendResponse
     };
 
     // Register the listener
-    chrome.storage.onChanged.addListener(handleDataFetch);
+    chrome.runtime.onMessage.addListener(handleDataFetch);
     chrome.runtime.onMessage.addListener(handleQueryFetchResults);
 
     // Cleanup function to remove the listener
@@ -82,34 +89,28 @@ function YouTubeView() {
   const handleExecuteQuery = useCallback(async () => {
     if (executionStateRef.current.isExecuting) return;
 
-    const requestId = Date.now();
-    executionStateRef.current.lastRequestId = requestId;
     executionStateRef.current.isExecuting = true;
     setLoading(true);
-    setError(null);
     setComments([]);
-
+    setError(null);
     chrome.runtime
       .sendMessage({
         action: "EXECUTE_QUERY",
         payload: { query },
       })
       .then((response) => {
-        if (requestId === executionStateRef.current.lastRequestId) {
-          if (response.status === "ERROR") {
-            throw new Error(response.error);
-          }
-
-          if (response.status === "TIMEOUT") {
-            throw new Error("Query execution command timed out");
-          }
+        if (response.status === "ERROR") {
+          throw new Error(response.error);
         }
+        console.log(response);
       })
       .catch((error) => {
         console.error("Query execution error:", error);
+        executionStateRef.current.isExecuting = false;
+        setLoading(false);
         setError(error.message);
       });
-  }, [query, executionStateRef.current.lastRequestId]);
+  }, [query]);
 
   const handleQueryChange = useCallback((value) => {
     setQuery(value);
@@ -153,7 +154,7 @@ function YouTubeView() {
                   onError={(e) => {
                     e.target.onerror = null;
                     e.target.src = chrome.runtime.getURL(
-                      "assets/default-avatar.png"
+                      "../assets/default-avatar.png"
                     );
                   }}
                 />
@@ -170,7 +171,7 @@ function YouTubeView() {
                 <div className="comment-text">{comment.textOriginal}</div>
                 <div className="comment-actions">
                   <img
-                    src="assets/thumbs-up.png"
+                    src="../assets/thumbs-up.png"
                     alt="Like"
                     className="like-icon"
                   />

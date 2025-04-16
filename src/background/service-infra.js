@@ -58,14 +58,9 @@ export async function executeQuery(query) {
   }
 
   try {
-    const [{ id: tabId }] = await chrome.tabs.query({
-      active: true,
-      currentWindow: true,
-    });
     await chrome.runtime.sendMessage({
       action: "QUERY_RESULT",
       payload: {
-        tabId,
         results,
       },
     });
@@ -74,91 +69,77 @@ export async function executeQuery(query) {
     throw error;
   }
 }
-export async function insertData({ fetchData, _dataSchema }) {
-  chrome.tabs.query(
-    { active: true, currentWindow: true },
-    async function (tabs) {
-      if (tabs && tabs.length > 0) {
-        const currentTabId = tabs[0].id;
-        const tabsDataFetchKey = currentTabId.toString();
-        const storageHash = await chrome.storage.local.get("tabsDataFetch");
+export async function insertData(fetchData, _dataSchema) {
+  try {
+    await chrome.runtime.sendMessage({
+      action: "DATA_FETCH_LOADING",
+    });
 
-        chrome.storage.local.set({
-          tabsDataFetch: {
-            ...(storageHash["tabsDataFetch"] || {}),
-            [tabsDataFetchKey]: "loading",
-          },
-        });
+    let items = [];
 
-        let items = [];
+    if (!fetchData) throw new Error("FetchData function is not set");
 
-        if (!fetchData) throw new Error("FetchData function is not set");
-
-        if (!db) {
-          try {
-            db = await getDatabase();
-          } catch (error) {
-            console.error("Error initializing database:", error);
-            throw error;
-          }
-        }
-
-        try {
-          items = await fetchData();
-        } catch (error) {
-          console.error("Error fetching data:", error);
-          throw error;
-        }
-
-        if (!items || items.length === 0) {
-          if (!items) {
-            console.log("No items to insert");
-          } else if (items.length === 0) {
-            console.log("No items found");
-          }
-          return;
-        }
-
-        try {
-          console.log("Inserting comments into the database...");
-          console.log("Transaction initiated.");
-          db.exec("BEGIN TRANSACTION");
-          items.forEach((item) => {
-            const comment = {
-              ...item.snippet.topLevelComment.snippet,
-              id: item.id,
-              totalReplyCount: item.snippet.totalReplyCount,
-            };
-            db.run(
-              `INSERT OR IGNORE INTO comments VALUES (?, ?, ?, ?, ?, ?, ?)`,
-              [
-                comment.id,
-                comment.authorDisplayName,
-                comment.textOriginal,
-                comment.likeCount,
-                comment.totalReplyCount,
-                comment.publishedAt,
-                comment.authorProfileImageUrl,
-              ]
-            );
-          });
-          db.exec("COMMIT");
-          console.log("Comments inserted successfully!");
-        } catch (error) {
-          db.exec("ROLLBACK");
-          console.error("Comments inserted failed!");
-          throw error;
-        } finally {
-          console.log("Transaction completed.");
-        }
-
-        chrome.storage.local.set({
-          tabsDataFetch: {
-            ...(storageHash["tabsDataFetch"] || {}),
-            [tabsDataFetchKey]: "done",
-          },
-        });
+    if (!db) {
+      try {
+        db = await getDatabase();
+      } catch (error) {
+        console.error("Error initializing database:", error);
+        throw error;
       }
     }
-  );
+
+    try {
+      items = await fetchData();
+    } catch (error) {
+      console.error("Error fetching data:", error);
+      throw error;
+    }
+
+    if (!items || items.length === 0) {
+      if (!items) {
+        console.log("No items to insert");
+      } else if (items.length === 0) {
+        console.log("No items found");
+      }
+      return;
+    }
+
+    try {
+      console.log("Inserting comments into the database...");
+      console.log("Transaction initiated.");
+      db.exec("BEGIN TRANSACTION");
+      items.forEach((item) => {
+        const comment = {
+          ...item.snippet.topLevelComment.snippet,
+          id: item.id,
+          totalReplyCount: item.snippet.totalReplyCount,
+        };
+        db.run(`INSERT OR IGNORE INTO comments VALUES (?, ?, ?, ?, ?, ?, ?)`, [
+          comment.id,
+          comment.authorDisplayName,
+          comment.textOriginal,
+          comment.likeCount,
+          comment.totalReplyCount,
+          comment.publishedAt,
+          comment.authorProfileImageUrl,
+        ]);
+      });
+      db.exec("COMMIT");
+      console.log("Comments inserted successfully!");
+    } catch (error) {
+      db.exec("ROLLBACK");
+      console.error("Comments inserted failed!");
+      throw error;
+    }
+
+    await chrome.runtime.sendMessage({
+      action: "DATA_FETCH_DONE",
+    });
+  } catch (error) {
+    console.error("Error in insertData:", error);
+    await chrome.runtime.sendMessage({
+      action: "DATA_FETCH_ERROR",
+    });
+    throw error;
+  }
 }

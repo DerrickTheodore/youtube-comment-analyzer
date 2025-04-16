@@ -1,4 +1,4 @@
-const comments = {
+const mockComments = {
   items: [
     {
       kind: "youtube#commentThread",
@@ -3640,7 +3640,7 @@ const comments = {
 export const fetchMockComments = () => {
   return new Promise((resolve) => {
     setTimeout(() => {
-      resolve(comments);
+      resolve({ ok: true, json: () => Promise.resolve(mockComments) });
     }, 1000);
   });
 };
