@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import SQLEditor from "../components/SQLEditor";
 
 function YouTubeView() {
@@ -9,8 +9,8 @@ function YouTubeView() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [enableUI, setEnableUI] = useState(true);
-  const executionStateRef = useRef({
-    isExecuting: false,
+  const [commentCount, setCommentCount] = useState({
+    loaded: 0,
   });
 
   useEffect(() => {
@@ -27,16 +27,9 @@ function YouTubeView() {
       } else if (action === "DATA_FETCH_DONE") {
         setLoading(false);
         setEnableUI(true);
-        setComments(
-          payload.results.flatMap((result) => {
-            return result.values.map((row) => {
-              return result.columns.reduce((acc, col, i) => {
-                acc[col] = row[i];
-                return acc;
-              }, {});
-            });
-          })
-        );
+        setCommentCount({
+          loaded: payload.totalInternalItems,
+        });
         sendResponse({
           status: "success",
           message: `Received action: ${action}`,
@@ -55,8 +48,8 @@ function YouTubeView() {
     const handleQueryFetchResults = async (request, _sender, sendResponse) => {
       const { action, payload } = request;
       if (action === "QUERY_RESULT") {
-        executionStateRef.current.isExecuting = false;
         setLoading(false);
+        setEnableUI(true);
         setComments(
           payload.results.flatMap((result) => {
             return result.values.map((row) => {
@@ -87,9 +80,6 @@ function YouTubeView() {
   }, []);
 
   const handleExecuteQuery = useCallback(async () => {
-    if (executionStateRef.current.isExecuting) return;
-
-    executionStateRef.current.isExecuting = true;
     setLoading(true);
     setComments([]);
     setError(null);
@@ -102,15 +92,35 @@ function YouTubeView() {
         if (response.status === "ERROR") {
           throw new Error(response.error);
         }
-        console.log(response);
       })
       .catch((error) => {
         console.error("Query execution error:", error);
-        executionStateRef.current.isExecuting = false;
         setLoading(false);
         setError(error.message);
       });
   }, [query]);
+
+  const handleLoadMore = useCallback(async () => {
+    setLoading(true);
+    setEnableUI(false);
+    chrome.runtime
+      .sendMessage({
+        action: "DATA_FETCH_START",
+      })
+      .then((response) => {
+        if (chrome.runtime?.lastError) {
+          throw new Error(`${chrome.runtime?.lastError}`);
+        }
+        setLoading(false);
+        setEnableUI(true);
+      })
+      .catch((error) => {
+        console.error("Query execution error:", error);
+        setLoading(false);
+        setEnableUI(true);
+        setError(error.message);
+      });
+  }, []);
 
   const handleQueryChange = useCallback((value) => {
     setQuery(value);
@@ -130,17 +140,26 @@ function YouTubeView() {
       <SQLEditor value={query} onChange={handleQueryChange} />
       <button
         onClick={handleExecuteQuery}
-        disabled={!enableUI || executionStateRef.current.isExecuting}
+        disabled={!enableUI}
         className="execute-btn"
       >
-        {executionStateRef.current.isExecuting
-          ? "Processing..."
-          : "Execute Query"}
+        {loading ? "Processing..." : "Execute Query"}
       </button>
 
       {loading && <div className="loading">Loading comments...</div>}
       {error && <div className="error">Error: {error}</div>}
-
+      <div className="comments-controls">
+        <label className="comments-counter">
+          Comments Loaded: {commentCount.loaded}
+        </label>
+        <button
+          onClick={handleLoadMore}
+          disabled={!enableUI}
+          className="load-more-btn"
+        >
+          {loading ? "Processing..." : "Load More"}
+        </button>
+      </div>
       <div className="comments-list">
         {comments.map((comment) => (
           <div key={comment.id} className="comment-thread">

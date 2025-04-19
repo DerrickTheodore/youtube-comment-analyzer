@@ -4,6 +4,13 @@ import {
   youtubeCommentsSchema,
 } from "./service-vendors.js";
 
+// Add comments to explain the purpose of each function and the expected structure of inputs and outputs
+
+/**
+ * Handles incoming requests and routes them to the appropriate service.
+ * @param {Object} request - The request object received.
+ * @param {Function} sendResponse - Callback to send a response.
+ */
 export function handleRequest(request, sendResponse) {
   const { action, payload } = request;
 
@@ -17,6 +24,11 @@ export function handleRequest(request, sendResponse) {
     case "POPUP_OPENED":
       insertData(fetchYouTubeComments, youtubeCommentsSchema);
       sendResponse({ status: "SUCCESS", message: "Popup opened" });
+      break;
+
+    case "DATA_FETCH_START":
+      insertData(fetchYouTubeComments, youtubeCommentsSchema);
+      sendResponse({ status: "SUCCESS", message: "Data fetch started" });
       break;
 
     default:

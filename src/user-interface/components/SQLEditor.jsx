@@ -1,11 +1,14 @@
-import { useEffect, useRef } from "react";
-import { EditorView, basicSetup } from "codemirror";
+import { autocompletion } from "@codemirror/autocomplete";
+import { indentWithTab } from "@codemirror/commands";
 import { sql } from "@codemirror/lang-sql";
 import { oneDark } from "@codemirror/theme-one-dark";
-import { autocompletion } from "@codemirror/autocomplete";
 import { keymap } from "@codemirror/view";
-import { indentWithTab } from "@codemirror/commands";
+import { EditorView, basicSetup } from "codemirror";
+import React, { useEffect, useRef } from "react";
 
+/**
+ * Renders the SQL editor component.
+ */
 function SQLEditor({ value = "", onChange }) {
   const editorRef = useRef(null);
 
@@ -27,7 +30,6 @@ function SQLEditor({ value = "", onChange }) {
         basicSetup,
         keymap.of([indentWithTab]),
         sql({
-          dialect: sql.sqlite,
           schema: schema,
           upperCaseKeywords: true,
           defaultTable: "comments",
