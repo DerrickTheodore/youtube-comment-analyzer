@@ -203,6 +203,36 @@
         margin-top: 20px;
       }
 
+      .comments-controls {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 16px;
+      }
+
+      .load-more-btn {
+        background-color: var(--youtube-blue);
+        color: white;
+        border: none;
+        padding: 8px 16px;
+        font-size: 14px;
+        font-weight: 500;
+        border-radius: 4px;
+        cursor: pointer;
+        transition: background-color 0.2s;
+      }
+      .load-more-btn:hover {
+        background-color: var(--youtube-blue);
+      }
+      .load-more-btn:disabled {
+        background-color: var(--stats-color);
+        cursor: not-allowed;
+      }
+      .comments-counter {
+        font-size: 14px;
+        color: var(--stats-color);
+      }
+
       .comment-thread {
         margin-bottom: 16px;
       }
@@ -372,6 +402,9 @@
   </head>
   <body>
     <div id="root"></div>
+    <!-- Side panel container for the user interface -->
+    <div id="sidepanel"></div>
+    <!-- Script to initialize the side panel functionality -->
     <script type="module" src="sidepanel.js"></script>
   </body>
 </html>

@@ -1,0 +1,15 @@
+{
+  "compilerOptions": {
+    "target": "es2016",
+    "module": "esnext",
+    "checkJs": true,
+    "baseUrl": ".",
+    "moduleResolution": "node",
+    "types": ["chrome"],
+    "jsx": "react",
+    "paths": {
+      "*": ["node_modules/*", "src/*"]
+    }
+  },
+  "include": ["src"]
+}

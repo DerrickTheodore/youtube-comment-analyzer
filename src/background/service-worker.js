@@ -1,6 +1,7 @@
+import { handleRequest } from "./service-controller.js";
+import { closeDatabase } from "./service-infra.js";
 import "./service-init.js";
 import { setSidePanelEnabled } from "./service-utils.js";
-import { handleRequest } from "./service-controller.js";
 
 // Tab Event listeners (Worker to React)
 chrome.tabs.onActivated.addListener(async (activeInfo) => {
@@ -23,11 +24,20 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
 // Message Event listeners
 chrome.runtime.onMessage.addListener(async (request, _sender, sendResponse) => {
   try {
-    if (["EXECUTE_QUERY", "POPUP_OPENED"].includes(request.action)) {
+    if (
+      ["EXECUTE_QUERY", "POPUP_OPENED", "DATA_FETCH_START"].includes(
+        request.action
+      )
+    ) {
       handleRequest(request, sendResponse);
     }
   } catch (error) {
     sendResponse({ status: "ERROR", error: error.message });
     return true;
   }
+});
+
+chrome.runtime.onSuspend.addListener(() => {
+  console.log("Service worker is shutting down. Closing database...");
+  closeDatabase();
 });

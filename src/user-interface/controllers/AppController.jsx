@@ -1,6 +1,9 @@
 import React, { useEffect } from "react";
 import YouTubeView from "../views/YouTubeView";
 
+/**
+ * Initializes the application controller and sets up event listeners.
+ */
 function AppController() {
   useEffect(() => {
     chrome.tabs.query({ active: true, currentWindow: true }).then(([tab]) => {
@@ -9,13 +12,12 @@ function AppController() {
           chrome.runtime
             .sendMessage({ action: "POPUP_OPENED" })
             .then((response) => {
-              if (chrome.runtime.LastError) {
+              if (chrome.runtime?.lastError) {
                 console.error(
                   `Error POPUP_OPENED: ${response}`,
-                  chrome.runtime.LastError
+                  chrome.runtime.lastError
                 );
               }
-              console.log("Successful POPUP_OPENED: ", response);
             })
             .catch((error) => {
               console.error(
@@ -27,7 +29,7 @@ function AppController() {
           window.close();
         }
       });
-    }, []);
+    });
   });
 
   return <div className="app-controller">{<YouTubeView />}</div>;

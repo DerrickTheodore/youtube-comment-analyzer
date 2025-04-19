@@ -18,13 +18,18 @@
     "sql.js": "^1.13.0"
   },
   "devDependencies": {
+    "@eslint/js": "^9.24.0",
     "@parcel/transformer-js": "^2.14.1",
     "@parcel/transformer-raw": "^2.14.1",
     "@parcel/transformer-react-refresh-wrap": "^2.14.1",
+    "@types/chrome": "^0.0.315",
     "buffer": "^6.0.3",
     "crypto-browserify": "^3.12.1",
+    "eslint": "^9.24.0",
+    "eslint-plugin-react": "^7.37.5",
     "events": "^3.3.0",
     "fast-glob": "^3.3.3",
+    "globals": "^16.0.0",
     "os-browserify": "^0.3.0",
     "parcel": "^2.14.1",
     "path-browserify": "^1.0.1",
