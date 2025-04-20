@@ -79,6 +79,25 @@ function YouTubeView() {
     };
   }, []);
 
+  useEffect(() => {
+    try {
+      chrome.runtime.sendMessage(
+        {
+          action: "LOAD_YOUTUBE_DATA",
+        },
+        () => {
+          if (chrome.runtime?.lastError) {
+            throw new Error(`${chrome.runtime?.lastError}`);
+          }
+        }
+      );
+    } catch (error) {
+      console.error("Error initiating YouTube data load:", error);
+      setError("Error initiating YouTube data load");
+      setEnableUI(false);
+    }
+  }, []);
+
   const handleExecuteQuery = useCallback(async () => {
     setLoading(true);
     setComments([]);
@@ -105,7 +124,7 @@ function YouTubeView() {
     setEnableUI(false);
     chrome.runtime
       .sendMessage({
-        action: "DATA_FETCH_START",
+        action: "LOAD_YOUTUBE_DATA",
       })
       .then((response) => {
         if (chrome.runtime?.lastError) {

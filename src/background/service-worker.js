@@ -7,7 +7,7 @@ import { setSidePanelEnabled } from "./service-utils.js";
 chrome.tabs.onActivated.addListener(async (activeInfo) => {
   try {
     const tab = await chrome.tabs.get(activeInfo.tabId);
-    setSidePanelEnabled(tab.id, tab.url);
+    await setSidePanelEnabled(tab.id, tab.url);
   } catch (error) {
     console.error("Handling tab update", error);
   }
@@ -24,11 +24,7 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
 // Message Event listeners
 chrome.runtime.onMessage.addListener(async (request, _sender, sendResponse) => {
   try {
-    if (
-      ["EXECUTE_QUERY", "POPUP_OPENED", "DATA_FETCH_START"].includes(
-        request.action
-      )
-    ) {
+    if (["EXECUTE_QUERY", "LOAD_YOUTUBE_DATA"].includes(request.action)) {
       handleRequest(request, sendResponse);
     }
   } catch (error) {

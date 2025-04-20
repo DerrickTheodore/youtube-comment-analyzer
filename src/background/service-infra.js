@@ -1,9 +1,54 @@
 import initSqlJs from "../lib/sql";
 
 let db = null;
+// @ts-ignore
+// Parcel handles process.env variables by inlining them during the build process,
+// making them directly available in the browser environment.
+const LOG_SQL_STATEMENTS = process.env.LOG_SQL_STATEMENTS;
 
 /**
- * Initializes the SQLite database and creates the comments table if it doesn't exist.
+ * Logs SQL statements and their parameters if logging is enabled.
+ *
+ * @param {string} statement - The SQL statement to log.
+ * @param {Array} [params=[]] - The parameters for the SQL statement.
+ */
+function logSql(statement, params = []) {
+  if (LOG_SQL_STATEMENTS === "true") {
+    console.log("Executing SQL:", statement);
+    if (params.length > 0) {
+      console.log("With parameters:", params);
+    }
+  }
+}
+
+/**
+ * Executes a SQL statement with logging.
+ *
+ * @param {Object} db - The database instance.
+ * @param {string} statement - The SQL statement to execute.
+ * @param {Array} [params=[]] - The parameters for the SQL statement.
+ * @returns {Object} - The result of the SQL execution.
+ */
+function execWithLogging(db, statement, params = []) {
+  logSql(statement, params);
+  return db.exec(statement, params);
+}
+
+/**
+ * Runs a SQL statement with logging.
+ *
+ * @param {Object} db - The database instance.
+ * @param {string} statement - The SQL statement to run.
+ * @param {Array} [params=[]] - The parameters for the SQL statement.
+ * @returns {Object} - The result of the SQL execution.
+ */
+function runWithLogging(db, statement, params = []) {
+  logSql(statement, params);
+  return db.run(statement, params);
+}
+
+/**
+ * Initializes the SQLite database.
  * @returns {Promise<SQL.Database>} The initialized database instance.
  */
 async function getDatabase() {
@@ -12,19 +57,15 @@ async function getDatabase() {
       locateFile: (file) => `../lib/${file}`,
     });
     db = new SQL.Database();
-    db.run(`
-        CREATE TABLE IF NOT EXISTS comments (
-          id TEXT PRIMARY KEY,
-          authorDisplayName TEXT,
-          textOriginal TEXT,
-          likeCount INTEGER,
-          totalReplyCount INTEGER,
-          publishedAt TEXT,
-          authorProfileImageUrl TEXT
-        );
-      `);
   }
   return db;
+}
+
+function createTableQuery(db, tableName, schema) {
+  const columns = Object.entries(schema)
+    .map(([name, type]) => `${name} ${type}`)
+    .join(", ");
+  return `CREATE TABLE IF NOT EXISTS ${tableName} (${columns})`;
 }
 
 /**
@@ -47,11 +88,11 @@ export async function executeQuery(query) {
   }
 
   try {
-    db.exec("BEGIN TRANSACTION");
-    results = db.exec(query);
-    db.exec("COMMIT");
+    execWithLogging(db, "BEGIN TRANSACTION");
+    results = execWithLogging(db, query);
+    execWithLogging(db, "COMMIT");
   } catch (error) {
-    db.exec("ROLLBACK");
+    execWithLogging(db, "ROLLBACK");
     console.error("Error executing query:", error);
     throw error;
   }
@@ -80,13 +121,13 @@ export async function executeQuery(query) {
 }
 
 /**
- * Fetches data using the provided fetchData function and inserts it into the comments table.
+ * Fetches data using the provided fetchData function and inserts it into the data model's table.
  * Sends status updates to the Chrome runtime during the process.
  * @param {Function} fetchData - A function that fetches data to be inserted.
- * @param {Object} _dataSchema - (Optional) Schema for data validation (not currently used).
+ * @param {Object} dataModel - Fetched data schema.
  * @throws Will throw an error if data fetching or insertion fails.
  */
-export async function insertData(fetchData, _dataSchema) {
+export async function insertData(fetchData, dataModel) {
   try {
     await chrome.runtime.sendMessage({
       action: "DATA_FETCH_LOADING",
@@ -115,34 +156,34 @@ export async function insertData(fetchData, _dataSchema) {
     }
 
     try {
-      db.exec("BEGIN TRANSACTION");
+      runWithLogging(
+        db,
+        createTableQuery(db, dataModel.tableName, dataModel.schema)
+      );
+      execWithLogging(db, "BEGIN TRANSACTION");
       items.forEach((item) => {
-        const comment = {
-          ...item.snippet.topLevelComment.snippet,
-          id: item.id,
-          totalReplyCount: item.snippet.totalReplyCount,
-        };
-        db.run(`INSERT OR IGNORE INTO comments VALUES (?, ?, ?, ?, ?, ?, ?)`, [
-          comment.id,
-          comment.authorDisplayName,
-          comment.textOriginal,
-          comment.likeCount,
-          comment.totalReplyCount,
-          comment.publishedAt,
-          comment.authorProfileImageUrl,
-        ]);
+        runWithLogging(
+          db,
+          `INSERT OR IGNORE INTO ${
+            dataModel.tableName
+          } VALUES (${dataModel.columns.map(() => "?").join(", ")})`,
+          dataModel.columns.map((col) => item[col])
+        );
       });
-      db.exec("COMMIT");
+      execWithLogging(db, "COMMIT");
     } catch (error) {
-      db.exec("ROLLBACK");
-      console.error("Comments inserted failed!");
+      execWithLogging(db, "ROLLBACK");
+      console.error("Data inserted failed!");
       throw error;
     }
 
     // Query the total number of items in the database
     let totalInternalItems = 0;
     try {
-      const result = db.exec("SELECT COUNT(*) AS total FROM comments");
+      const result = execWithLogging(
+        db,
+        `SELECT COUNT(*) AS total FROM ${dataModel.tableName}`
+      );
       totalInternalItems = result[0]?.values[0][0] || 0; // Extract the count value
     } catch (error) {
       console.error("Error querying total items in database:", error);
