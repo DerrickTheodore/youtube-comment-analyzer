@@ -1,7 +1,7 @@
 import { executeQuery, insertData } from "./service-infra.js";
 import {
   fetchYouTubeComments,
-  youtubeCommentsSchema,
+  youtubeCommentsModel,
 } from "./service-vendors.js";
 
 // Add comments to explain the purpose of each function and the expected structure of inputs and outputs
@@ -21,13 +21,8 @@ export function handleRequest(request, sendResponse) {
       sendResponse({ status: "SUCCESS", message: "Query command executed" });
       break;
 
-    case "POPUP_OPENED":
-      insertData(fetchYouTubeComments, youtubeCommentsSchema);
-      sendResponse({ status: "SUCCESS", message: "Popup opened" });
-      break;
-
-    case "DATA_FETCH_START":
-      insertData(fetchYouTubeComments, youtubeCommentsSchema);
+    case "LOAD_YOUTUBE_DATA":
+      insertData(fetchYouTubeComments, youtubeCommentsModel);
       sendResponse({ status: "SUCCESS", message: "Data fetch started" });
       break;
 
