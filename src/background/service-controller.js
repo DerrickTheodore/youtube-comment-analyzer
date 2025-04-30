@@ -1,32 +1,126 @@
-import { executeQuery, insertData } from "./service-infra.js";
+import { getMessageTransactionKey } from "../lib/shared-utils";
 import {
-  fetchYouTubeComments,
-  youtubeCommentsModel,
+  createScopeQuery,
+  executeQuery,
+  parseQueryResults,
+  runInsertQuery,
+} from "./service-infra.js";
+import { getCurrentTab } from "./service-utils.js";
+import {
+  getYouTubeCommentsFirstPage,
+  getYouTubeVideo,
+  youtubeCommentsSchema,
+  youtubeVideosSchema,
 } from "./service-vendors.js";
 
-// Add comments to explain the purpose of each function and the expected structure of inputs and outputs
+async function handleExternalResponse(payload) {
+  return await chrome.runtime.sendMessage(
+    { action: "RESPONSE", payload },
+    (response) => {
+      if (chrome.runtime?.lastError)
+        throw new Error(
+          `(SERVICE_WORKER) (${
+            payload?.status || "'No Status Found'"
+          }) RESPONSE[${
+            payload?.request?.action || "'No Action Found'"
+          }]:\n${JSON.stringify(chrome.runtime?.lastError, null, 2)}`
+        );
 
-/**
- * Handles incoming requests and routes them to the appropriate service.
- * @param {Object} request - The request object received.
- * @param {Function} sendResponse - Callback to send a response.
- */
-export function handleRequest(request, sendResponse) {
-  const { action, payload } = request;
+      if (response)
+        console.log(
+          `(SERVICE_WORKER) (${
+            payload?.status || "'No Status Found'"
+          }) RESPONSE[${
+            payload?.request?.action || "'No Action Found'"
+          }]:\n${JSON.stringify(response, null, 2)}`
+        );
+    }
+  );
+}
 
-  switch (action) {
-    case "EXECUTE_QUERY":
-      if (!payload?.query) throw new Error("No query provided");
-      executeQuery(payload.query);
-      sendResponse({ status: "SUCCESS", message: "Query command executed" });
-      break;
+export async function handleExternalRequest(request) {
+  try {
+    request = {
+      ...request,
+      transactionKey: await getMessageTransactionKey(request),
+    };
+    await handleExternalResponse({
+      request,
+      status: "LOADING",
+      data: null,
+      error: null,
+    });
 
-    case "LOAD_YOUTUBE_DATA":
-      insertData(fetchYouTubeComments, youtubeCommentsModel);
-      sendResponse({ status: "SUCCESS", message: "Data fetch started" });
-      break;
-
-    default:
-      throw new Error(`Unknown action: ${action}`);
+    await handleExternalResponse({
+      request,
+      status: "DONE",
+      data: await handleRequestQueue([request].flat()),
+      error: null,
+    });
+  } catch (error) {
+    await handleExternalResponse({
+      request,
+      status: "ERROR",
+      data: null,
+      error: error.message,
+    });
   }
+}
+
+async function handleRequest(request) {
+  const { action, payload } = request;
+  let executeAction = null;
+
+  const actions = {
+    LOAD_YOUTUBE_VIEW_DATA: async () =>
+      await handleRequestQueue([
+        { action: "LOAD_YOUTUBE_VIDEO_DATA" },
+        { action: "LOAD_YOUTUBE_VIDEO_COMMENT_DATA" },
+        {
+          action: "EXECUTE_YOUTUBE_COMMENT_DATA_QUERY",
+          payload: {
+            query: `SELECT * FROM ${youtubeCommentsSchema.tableName}`,
+          },
+        },
+      ]),
+    LOAD_YOUTUBE_VIDEO_DATA: async () =>
+      await runInsertQuery(await getYouTubeVideo(), youtubeVideosSchema),
+    LOAD_YOUTUBE_VIDEO_COMMENT_DATA: async () => {
+      const [video, tab] = await Promise.all([
+        getYouTubeVideo(),
+        getCurrentTab(),
+      ]);
+      await runInsertQuery(
+        await getYouTubeCommentsFirstPage(video, tab),
+        youtubeCommentsSchema
+      );
+    },
+    EXECUTE_YOUTUBE_COMMENT_DATA_QUERY: async () =>
+      parseQueryResults(
+        await executeQuery(
+          await createScopeQuery(
+            payload.query,
+            youtubeCommentsSchema,
+            await getYouTubeVideo()
+          )
+        )
+      ),
+  };
+
+  if (!actions[action]) {
+    throw new Error(`Unknown action: ${action}`);
+  } else {
+    executeAction = actions[action];
+  }
+
+  return await executeAction(request);
+}
+
+async function handleRequestQueue(requests) {
+  let results = [];
+  for (const request of requests) {
+    const result = await handleRequest(request);
+    if (result) results = [...results, result.flat()];
+  }
+  return results;
 }
