@@ -71,6 +71,8 @@ chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
       status: "ERROR",
       error: error.message,
     });
+  } finally {
+    return true; // Keep the message channel open for async response
   }
 });
 
