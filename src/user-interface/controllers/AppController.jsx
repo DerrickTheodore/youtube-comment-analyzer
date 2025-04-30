@@ -1,44 +1,32 @@
-import React, { useEffect, useState } from "react";
+import React from "react";
+import {
+  useInitialTabSetup,
+  useTabViewRefreshKey,
+} from "../hooks/useTabEvents"; // Import custom hooks
 import YouTubeView from "../views/YouTubeView";
 
-/**
- * Initializes the application controller and sets up event listeners.
- */
 function AppController() {
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  useEffect(() => {
-    setLoading(true);
-    chrome.tabs
-      .query({ active: true, currentWindow: true })
-      .then(([tab]) => {
-        chrome.sidePanel.getOptions({ tabId: tab.id }).then(({ enabled }) => {
-          if (!enabled) {
-            window.close();
-            return;
-          }
-          setLoading(false);
-        });
-      })
-      .catch((error) => {
-        setError("Error querying tab's sidepanel options");
-        setLoading(false);
-        console.error("Error querying tab's sidepanel options:", error);
-      });
-  });
+  // Use the custom hook for initial setup - capture initialVideoId
+  const [initialLoading, initialError, currentTabId, initialVideoId] =
+    useInitialTabSetup();
 
+  // Use the custom hook to get the refresh key - pass initialVideoId
+  const viewKey = useTabViewRefreshKey(currentTabId, initialVideoId);
+
+  // Render logic remains largely the same, using state from hooks
   return (
     <div className="app-controller">
-      {loading ? (
+      {initialLoading ? (
         <div className="loading-spinner">
           <div className="spinner"></div>
         </div>
-      ) : error ? (
+      ) : initialError ? (
         <div className="error-message">
-          <p>{error}</p>
+          <p>{initialError}</p>
         </div>
       ) : (
-        <YouTubeView />
+        // Pass the viewKey obtained from the custom hook
+        <YouTubeView key={viewKey} />
       )}
     </div>
   );

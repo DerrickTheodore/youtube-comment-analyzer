@@ -1,144 +1,186 @@
 import React, { useCallback, useEffect, useState } from "react";
+import {
+  asyncMessageHandler,
+  getMessageTransactionKey,
+} from "../../lib/shared-utils";
 import SQLEditor from "../components/SQLEditor";
 
 function YouTubeView() {
   const [query, setQuery] = useState(
-    "SELECT *\nFROM comments\nORDER BY\n\tlikeCount DESC,\n\tpublishedAt DESC\nLIMIT 10"
+    "SELECT *\nFROM comments\nORDER BY\nlikeCount DESC,\npublishedAt DESC\nLIMIT 5"
   );
-  const [comments, setComments] = useState([]);
+  const [comments, setComments] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [enableUI, setEnableUI] = useState(true);
-  const [commentCount, setCommentCount] = useState({
-    loaded: 0,
-  });
+  const [commentCount, setCommentCount] = useState(0);
 
   useEffect(() => {
-    // Define listener handlers
-    const handleDataFetch = async (request, _sender, sendResponse) => {
-      const { action, payload } = request;
-      if (action === "DATA_FETCH_LOADING") {
-        setLoading(true);
-        setEnableUI(false);
-        sendResponse({
-          status: "success",
-          message: `Received action: ${action}`,
-        });
-      } else if (action === "DATA_FETCH_DONE") {
-        setLoading(false);
-        setEnableUI(true);
-        setCommentCount({
-          loaded: payload.totalInternalItems,
-        });
-        sendResponse({
-          status: "success",
-          message: `Received action: ${action}`,
-        });
-      } else if (action === "DATA_FETCH_ERROR") {
-        setLoading(false);
-        setEnableUI(true);
-        setComments([]);
-        setError("Error fetching data");
-        sendResponse({
-          status: "success",
-          message: `Received action: ${action}`,
-        });
-      }
-    };
-    const handleQueryFetchResults = async (request, _sender, sendResponse) => {
-      const { action, payload } = request;
-      if (action === "QUERY_RESULT") {
-        setLoading(false);
-        setEnableUI(true);
-        setComments(
-          payload.results.flatMap((result) => {
-            return result.values.map((row) => {
-              return result.columns.reduce((acc, col, i) => {
-                acc[col] = row[i];
-                return acc;
-              }, {});
-            });
-          })
+    const handleCommentDataFetchAsync = asyncMessageHandler(
+      async (request, _sender) => {
+        const { action, payload } = request;
+        let transactionKey;
+
+        if (action !== "RESPONSE") return;
+        if (
+          payload &&
+          payload?.request &&
+          payload?.request?.action &&
+          payload.request.action !== "LOAD_YOUTUBE_VIEW_DATA"
+        )
+          return;
+
+        transactionKey = await getMessageTransactionKey(payload.request);
+
+        if (
+          payload?.transactionKey &&
+          payload.transactionKey !== transactionKey
+        )
+          return;
+
+        console.log(
+          `Received action: ${action} with transactionKey: ${transactionKey}`
         );
-        sendResponse({
-          status: "success",
-          message: `Received action: ${action}`,
-        });
+        console.log("Payload:", JSON.stringify(payload, null, 2));
+
+        if (payload?.status === "LOADING") {
+          setLoading(true);
+          setEnableUI(false);
+        }
+        if (payload?.status === "DONE") {
+          const {
+            data: [comments],
+          } = payload;
+          setLoading(false);
+          setEnableUI(true);
+          setComments(comments);
+          setCommentCount(comments.length);
+        }
+        if (payload?.status === "ERROR") {
+          setLoading(false);
+          setEnableUI(true);
+          setError(payload.error);
+        }
       }
-      return true; // Keep the message channel open for sendResponse
-    };
+    );
+    const handleQueryResultFetchAsync = asyncMessageHandler(
+      async (request, _sender) => {
+        const { action, payload } = request;
+        let transactionKey;
 
-    // Register the listener
-    chrome.runtime.onMessage.addListener(handleDataFetch);
-    chrome.runtime.onMessage.addListener(handleQueryFetchResults);
+        if (action !== "RESPONSE") return;
+        if (
+          payload &&
+          payload?.request &&
+          payload?.request?.action &&
+          payload.request.action !== "EXECUTE_YOUTUBE_COMMENT_DATA_QUERY"
+        )
+          return;
 
-    // Cleanup function to remove the listener
+        transactionKey = await getMessageTransactionKey(payload.request);
+
+        if (
+          payload?.transactionKey &&
+          payload.transactionKey !== transactionKey
+        )
+          return;
+
+        console.log(
+          `Received action: ${action} with transactionKey: ${transactionKey}`
+        );
+        console.log("Payload:", JSON.stringify(payload, null, 2));
+
+        if (payload?.status === "LOADING") {
+          setLoading(true);
+          setEnableUI(false);
+        }
+        if (payload?.status === "DONE") {
+          const {
+            data: [comments],
+          } = payload;
+          setLoading(false);
+          setEnableUI(true);
+          setComments(comments);
+        }
+        if (payload?.status === "ERROR") {
+          setLoading(false);
+          setEnableUI(true);
+          setError(payload.error);
+        }
+      }
+    );
+
+    chrome.runtime.onMessage.addListener(handleCommentDataFetchAsync);
+    chrome.runtime.onMessage.addListener(handleQueryResultFetchAsync);
+
     return () => {
-      chrome.storage.onChanged.removeListener(handleDataFetch);
-      chrome.runtime.onMessage.removeListener(handleQueryFetchResults);
+      chrome.runtime.onMessage.removeListener(handleCommentDataFetchAsync);
+      chrome.runtime.onMessage.removeListener(handleQueryResultFetchAsync);
     };
   }, []);
 
   useEffect(() => {
-    try {
-      chrome.runtime.sendMessage(
-        {
-          action: "LOAD_YOUTUBE_DATA",
-        },
-        () => {
-          if (chrome.runtime?.lastError) {
-            throw new Error(`${chrome.runtime?.lastError}`);
-          }
+    chrome.runtime.sendMessage(
+      {
+        action: "LOAD_YOUTUBE_VIEW_DATA",
+      },
+      (response) => {
+        if (chrome.runtime?.lastError)
+          throw new Error(
+            `(YOUTUBE_VIEW) REQUEST["LOAD_YOUTUBE_VIEW_DATA"]:\n${JSON.stringify(
+              chrome.runtime?.lastError,
+              null,
+              2
+            )}`
+          );
+        if (response) {
+          console.log(
+            `(YOUTUBE_VIEW) REQUEST["LOAD_YOUTUBE_VIEW_DATA"]:\n${JSON.stringify(
+              response,
+              null,
+              2
+            )}`
+          );
         }
-      );
-    } catch (error) {
-      console.error("Error initiating YouTube data load:", error);
-      setError("Error initiating YouTube data load");
-      setEnableUI(false);
-    }
+      }
+    );
   }, []);
 
   const handleExecuteQuery = useCallback(async () => {
-    setLoading(true);
-    setComments([]);
-    setError(null);
-    chrome.runtime
-      .sendMessage({
-        action: "EXECUTE_QUERY",
+    chrome.runtime.sendMessage(
+      {
+        action: "EXECUTE_YOUTUBE_COMMENT_DATA_QUERY",
         payload: { query },
-      })
-      .then((response) => {
-        if (response.status === "ERROR") {
-          throw new Error(response.error);
-        }
-      })
-      .catch((error) => {
-        console.error("Query execution error:", error);
-        setLoading(false);
-        setError(error.message);
-      });
+      },
+      () => {
+        if (chrome.runtime?.lastError)
+          throw new Error(
+            `"EXECUTE_YOUTUBE_COMMENT_DATA_QUERY":\n${JSON.stringify(
+              chrome.runtime?.lastError,
+              null,
+              2
+            )}`
+          );
+      }
+    );
   }, [query]);
 
   const handleLoadMore = useCallback(async () => {
-    setLoading(true);
-    setEnableUI(false);
-    chrome.runtime
-      .sendMessage({
-        action: "LOAD_YOUTUBE_DATA",
-      })
-      .then((response) => {
-        if (chrome.runtime?.lastError) {
-          throw new Error(`${chrome.runtime?.lastError}`);
-        }
-        setLoading(false);
-        setEnableUI(true);
-      })
-      .catch((error) => {
-        console.error("Query execution error:", error);
-        setLoading(false);
-        setEnableUI(true);
-        setError(error.message);
-      });
+    chrome.runtime.sendMessage(
+      {
+        action: "LOAD_YOUTUBE_VIDEO_COMMENT_DATA",
+      },
+      () => {
+        if (chrome.runtime?.lastError)
+          throw new Error(
+            `"LOAD_YOUTUBE_VIDEO_COMMENT_DATA":\n${JSON.stringify(
+              chrome.runtime?.lastError,
+              null,
+              2
+            )}`
+          );
+      }
+    );
   }, []);
 
   const handleQueryChange = useCallback((value) => {
@@ -169,7 +211,7 @@ function YouTubeView() {
       {error && <div className="error">Error: {error}</div>}
       <div className="comments-controls">
         <label className="comments-counter">
-          Comments Loaded: {commentCount.loaded}
+          Comments Loaded: {commentCount}
         </label>
         <button
           onClick={handleLoadMore}
@@ -180,50 +222,54 @@ function YouTubeView() {
         </button>
       </div>
       <div className="comments-list">
-        {comments.map((comment) => (
-          <div key={comment.id} className="comment-thread">
-            <div className="comment">
-              <div className="comment-avatar">
-                <img
-                  src={comment.authorProfileImageUrl || "default-avatar.png"}
-                  loading="lazy"
-                  alt={`${comment.authorDisplayName}'s avatar`}
-                  className="avatar-img"
-                  onError={(e) => {
-                    e.target.onerror = null;
-                    e.target.src = chrome.runtime.getURL(
-                      "../assets/default-avatar.png"
-                    );
-                  }}
-                />
-              </div>
-              <div className="comment-content">
-                <div className="comment-header">
-                  <span className="comment-author">
-                    {comment.authorDisplayName}
-                  </span>
-                  <span className="comment-time">
-                    {formatDate(comment.publishedAt)}
-                  </span>
-                </div>
-                <div className="comment-text">{comment.textOriginal}</div>
-                <div className="comment-actions">
+        {!comments ? (
+          <div className="no-comments">No comments available.</div>
+        ) : (
+          comments.map((comment) => (
+            <div key={comment.id} className="comment-thread">
+              <div className="comment">
+                <div className="comment-avatar">
                   <img
-                    src="../assets/thumbs-up.png"
-                    alt="Like"
-                    className="like-icon"
+                    src={comment.authorProfileImageUrl || "default-avatar.png"}
+                    loading="lazy"
+                    alt={`${comment.authorDisplayName}'s avatar`}
+                    className="avatar-img"
+                    onError={(e) => {
+                      e.target.onerror = null;
+                      e.target.src = chrome.runtime.getURL(
+                        "../assets/default-avatar.png"
+                      );
+                    }}
                   />
-                  <span className="like-count">{comment.likeCount}</span>
-                  {comment.totalReplyCount > 0 && (
-                    <button className="view-replies-btn">
-                      View replies ({comment.totalReplyCount})
-                    </button>
-                  )}
+                </div>
+                <div className="comment-content">
+                  <div className="comment-header">
+                    <span className="comment-author">
+                      {comment.authorDisplayName}
+                    </span>
+                    <span className="comment-time">
+                      {formatDate(comment.publishedAt)}
+                    </span>
+                  </div>
+                  <div className="comment-text">{comment.textOriginal}</div>
+                  <div className="comment-actions">
+                    <img
+                      src="../assets/thumbs-up.png"
+                      alt="Like"
+                      className="like-icon"
+                    />
+                    <span className="like-count">{comment.likeCount}</span>
+                    {comment.totalReplyCount > 0 && (
+                      <button className="view-replies-btn">
+                        View replies ({comment.totalReplyCount})
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-        ))}
+          ))
+        )}
       </div>
     </div>
   );

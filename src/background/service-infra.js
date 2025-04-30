@@ -1,91 +1,119 @@
 import initSqlJs from "../lib/sql";
 
-let db = null;
 // @ts-ignore
 // Parcel handles process.env variables by inlining them during the build process,
 // making them directly available in the browser environment.
-const LOG_SQL_STATEMENTS = process.env.LOG_SQL_STATEMENTS;
+let LOG_SQL_STATEMENTS = process.env.LOG_SQL_STATEMENTS;
 
-/**
- * Logs SQL statements and their parameters if logging is enabled.
- *
- * @param {string} statement - The SQL statement to log.
- * @param {Array} [params=[]] - The parameters for the SQL statement.
- */
+if (LOG_SQL_STATEMENTS === undefined) {
+  console.warn("Debeloper SQL logging is not set, defaulting to false");
+  LOG_SQL_STATEMENTS = false;
+}
+if (LOG_SQL_STATEMENTS === "true") {
+  console.warn("Debeloper SQL logging is set to true");
+}
+if (LOG_SQL_STATEMENTS === "false") {
+  console.warn("Debeloper SQL logging is set to false");
+}
+if (LOG_SQL_STATEMENTS !== "true" && LOG_SQL_STATEMENTS !== "false") {
+  throw new Error(
+    "Debeloper SQL logging is not a boolean, must be true or false"
+  );
+}
+
 function logSql(statement, params = []) {
   if (LOG_SQL_STATEMENTS === "true") {
     console.log("Executing SQL:", statement);
     if (params.length > 0) {
-      console.log("With parameters:", params);
+      console.log("With parameters:", JSON.stringify(params, null, 2));
     }
   }
 }
 
-/**
- * Executes a SQL statement with logging.
- *
- * @param {Object} db - The database instance.
- * @param {string} statement - The SQL statement to execute.
- * @param {Array} [params=[]] - The parameters for the SQL statement.
- * @returns {Object} - The result of the SQL execution.
- */
 function execWithLogging(db, statement, params = []) {
   logSql(statement, params);
   return db.exec(statement, params);
 }
 
-/**
- * Runs a SQL statement with logging.
- *
- * @param {Object} db - The database instance.
- * @param {string} statement - The SQL statement to run.
- * @param {Array} [params=[]] - The parameters for the SQL statement.
- * @returns {Object} - The result of the SQL execution.
- */
 function runWithLogging(db, statement, params = []) {
   logSql(statement, params);
   return db.run(statement, params);
 }
 
-/**
- * Initializes the SQLite database.
- * @returns {Promise<SQL.Database>} The initialized database instance.
- */
-async function getDatabase() {
-  if (!db) {
-    const SQL = await initSqlJs({
-      locateFile: (file) => `../lib/${file}`,
-    });
-    db = new SQL.Database();
-  }
-  return db;
-}
+const databaseManager = (() => {
+  let dbPromise = null; // Cached promise for the database instance
 
-function createTableQuery(db, tableName, schema) {
-  const columns = Object.entries(schema)
-    .map(([name, type]) => `${name} ${type}`)
-    .join(", ");
-  return `CREATE TABLE IF NOT EXISTS ${tableName} (${columns})`;
-}
-
-/**
- * Executes a SQL query within a transaction and sends the results to the Chrome runtime.
- * @param {string} query - The SQL query to execute.
- * @throws Will throw an error if the query is invalid or execution fails.
- */
-export async function executeQuery(query) {
-  let results = [];
-  if (!query) throw new Error("Query is not set");
-  if (query.trim().length === 0) throw new Error("Query cannot be empty");
-
-  if (!db) {
+  const initialize = async () => {
     try {
-      db = await getDatabase();
+      console.log("Initializing SQL.js...");
+      const SQL = await initSqlJs({
+        locateFile: (file) => `../lib/${file}`,
+      });
+      const db = new SQL.Database();
+      console.log("Database initialized successfully.");
+      return db;
     } catch (error) {
-      console.error("Error initializing database:", error);
+      console.error("Database initialization failed:", error);
+      dbPromise = null; // Reset promise on failure to allow retry
       throw error;
     }
-  }
+  };
+
+  const get = async () => {
+    if (!dbPromise) {
+      console.log("No cached database promise found, initializing...");
+      dbPromise = initialize();
+    } else {
+      console.log("Returning cached database promise.");
+    }
+    // Return the promise. If initialization failed previously, it might reject.
+    // If successful, it resolves to the db instance.
+    return dbPromise;
+  };
+
+  const close = async () => {
+    if (!dbPromise) {
+      console.log(
+        "Database not initialized or already closed, nothing to close."
+      );
+      return;
+    }
+    try {
+      // Await the promise to ensure initialization is complete (or failed)
+      const db = await dbPromise;
+      db.close();
+      dbPromise = null; // Reset the cache
+      console.log("Database closed successfully and cache reset.");
+    } catch (error) {
+      // This catches errors during initialization (if close is called before init finishes)
+      // or errors during db.close() itself.
+      console.error("Error closing database:", error);
+      // Reset promise even if closing failed, to allow re-initialization attempt
+      dbPromise = null;
+    }
+  };
+
+  return { getDatabase: get, closeDatabase: close };
+})();
+
+export function createScopeQuery(query, dataSchema, scopingRow) {
+  return `
+    SELECT scoped.*
+    FROM (
+      ${query.replace(
+        new RegExp(`FROM\\s+${dataSchema.tableName}`, "i"),
+        `FROM (
+          SELECT * FROM ${dataSchema.tableName} WHERE ${dataSchema.tableName}.${
+          dataSchema.scopingTable.foreignKey
+        } = '${scopingRow[dataSchema.scopingTable.primaryKey]}'
+         ) scoped_source`
+      )}
+    ) AS scoped `;
+}
+
+export async function executeQuery(query) {
+  let results;
+  const db = await databaseManager.getDatabase();
 
   try {
     execWithLogging(db, "BEGIN TRANSACTION");
@@ -97,121 +125,54 @@ export async function executeQuery(query) {
     throw error;
   }
 
-  try {
-    results = results.map((result) => ({
-      columns: result.columns,
-      values: result?.values,
-    }));
-  } catch (error) {
-    console.error("Error processing results:", error);
-    throw error;
-  }
-
-  try {
-    await chrome.runtime.sendMessage({
-      action: "QUERY_RESULT",
-      payload: {
-        results,
-      },
-    });
-  } catch (error) {
-    console.error("Error sending message to runtime:", error);
-    throw error;
-  }
+  return results;
 }
 
-/**
- * Fetches data using the provided fetchData function and inserts it into the data model's table.
- * Sends status updates to the Chrome runtime during the process.
- * @param {Function} fetchData - A function that fetches data to be inserted.
- * @param {Object} dataModel - Fetched data schema.
- * @throws Will throw an error if data fetching or insertion fails.
- */
-export async function insertData(fetchData, dataModel) {
+function createTableQuery(dataSchema) {
+  const columns = Object.entries(dataSchema.schema)
+    .map(([name, type]) => `${name} ${type}`)
+    .join(", ");
+  return `CREATE TABLE IF NOT EXISTS ${dataSchema.tableName} (${columns})`;
+}
+
+function createInsertQuery(dataSchema) {
+  const placeholders = dataSchema.columns.map(() => "?").join(", ");
+  return `INSERT OR IGNORE INTO ${
+    dataSchema.tableName
+  } (${dataSchema.columns.join(", ")}) VALUES (${placeholders})`;
+}
+
+export async function runInsertQuery(data, dataSchema) {
+  const dataRows = [data].flat();
+  const db = await databaseManager.getDatabase();
+
   try {
-    await chrome.runtime.sendMessage({
-      action: "DATA_FETCH_LOADING",
-    });
+    runWithLogging(db, createTableQuery(dataSchema));
 
-    if (!fetchData) throw new Error("FetchData function is not set");
-
-    if (!db) {
-      try {
-        db = await getDatabase();
-      } catch (error) {
-        console.error("Error initializing database:", error);
-        throw error;
-      }
-    }
-
-    const { items } = await fetchData();
-
-    if (!items || items.length === 0) {
-      if (!items) {
-        console.log("No items to insert");
-      } else if (items.length === 0) {
-        console.log("No items found");
-      }
-      return;
-    }
-
-    try {
+    execWithLogging(db, "BEGIN TRANSACTION");
+    const insertQuery = createInsertQuery(dataSchema);
+    for (const dataRow of dataRows) {
       runWithLogging(
         db,
-        createTableQuery(db, dataModel.tableName, dataModel.schema)
+        insertQuery,
+        dataSchema.columns.map((col) => dataRow[col])
       );
-      execWithLogging(db, "BEGIN TRANSACTION");
-      items.forEach((item) => {
-        runWithLogging(
-          db,
-          `INSERT OR IGNORE INTO ${
-            dataModel.tableName
-          } VALUES (${dataModel.columns.map(() => "?").join(", ")})`,
-          dataModel.columns.map((col) => item[col])
-        );
-      });
-      execWithLogging(db, "COMMIT");
-    } catch (error) {
-      execWithLogging(db, "ROLLBACK");
-      console.error("Data inserted failed!");
-      throw error;
     }
-
-    // Query the total number of items in the database
-    let totalInternalItems = 0;
-    try {
-      const result = execWithLogging(
-        db,
-        `SELECT COUNT(*) AS total FROM ${dataModel.tableName}`
-      );
-      totalInternalItems = result[0]?.values[0][0] || 0; // Extract the count value
-    } catch (error) {
-      console.error("Error querying total items in database:", error);
-      throw error;
-    }
-
-    await chrome.runtime.sendMessage({
-      action: "DATA_FETCH_DONE",
-      payload: {
-        totalInternalItems,
-      },
-    });
+    execWithLogging(db, "COMMIT");
   } catch (error) {
-    console.error("Error in insertData:", error);
-    await chrome.runtime.sendMessage({
-      action: "DATA_FETCH_ERROR",
-    });
-    throw error;
+    execWithLogging(db, "ROLLBACK");
   }
 }
 
-/**
- * Closes the SQLite database and resets the reference to avoid accidental reuse.
- */
-export function closeDatabase() {
-  if (db) {
-    db.close();
-    db = null; // Reset the reference to avoid accidental reuse
-    console.log("Database closed successfully.");
-  }
+export function parseQueryResults(results) {
+  if (results.length === 0) return [];
+  const { columns, values: rows } = results[0];
+  return rows.map((row) =>
+    columns.reduce((rowObject, col, index) => {
+      rowObject[col] = row[index];
+      return rowObject;
+    }, {})
+  );
 }
+
+export const closeDatabase = databaseManager.closeDatabase;

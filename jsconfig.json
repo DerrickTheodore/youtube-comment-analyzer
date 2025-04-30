@@ -1,6 +1,8 @@
 {
   "compilerOptions": {
-    "target": "es2017",
+    "target": "es2020",
+    "lib": ["es2020", "dom"],
+    "allowJs": true,
     "module": "esnext",
     "checkJs": true,
     "baseUrl": ".",

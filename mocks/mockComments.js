@@ -3636,11 +3636,4 @@ const mockComments = {
     },
   ],
 };
-
-export const fetchMockComments = () => {
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      resolve({ ok: true, json: () => Promise.resolve(mockComments) });
-    }, 1000);
-  });
-};
+export default mockComments;
