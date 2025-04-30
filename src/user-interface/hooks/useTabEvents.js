@@ -93,6 +93,7 @@ export function useInitialTabSetup() {
 export function useTabViewRefreshKey(currentTabId, initialVideoId) {
   const [viewKey, setViewKey] = useState(generateKey());
   // Store the last known video ID associated with the current viewKey
+  // Still useful for debugging or potential future logic, though not for the activation check anymore.
   const [lastVideoId, setLastVideoId] = useState(initialVideoId);
 
   // Update lastVideoId when initialVideoId is first available
@@ -109,7 +110,8 @@ export function useTabViewRefreshKey(currentTabId, initialVideoId) {
         `Triggering view refresh (updating key) due to ${sourceEvent}. New video ID: ${newVideoId}`
       );
       setViewKey(generateKey());
-      setLastVideoId(newVideoId); // Store the new video ID
+      // Update lastVideoId even if the check is removed from activation
+      setLastVideoId(newVideoId);
     },
     [] // No dependencies needed here as it just sets state
   );
@@ -141,7 +143,7 @@ export function useTabViewRefreshKey(currentTabId, initialVideoId) {
             );
             window.close();
           } else if (currentVideoId !== lastVideoId) {
-            // *** CHANGE HERE: Only refresh if video ID changed ***
+            // Refresh on update ONLY if video ID changed (keeping this optimization here)
             triggerViewRefresh("onUpdated", currentVideoId);
           } else {
             console.log(
@@ -150,12 +152,11 @@ export function useTabViewRefreshKey(currentTabId, initialVideoId) {
           }
         } catch (err) {
           console.error("Error during onUpdated handling:", err);
-          // Decide how to handle error, maybe close or show message
         }
       }
     };
 
-    // Async handler for tab activation (remains the same)
+    // Async handler for tab activation
     const handleTabActivation = async (activeInfo) => {
       if (activeInfo.tabId === currentTabId) {
         try {
@@ -167,23 +168,23 @@ export function useTabViewRefreshKey(currentTabId, initialVideoId) {
             tabId: activeInfo.tabId,
           });
 
+          console.log(
+            `Tab activated. Current video ID: ${currentVideoId}, Side panel enabled: ${enabled}`
+          );
+
           if (!enabled || !currentVideoId) {
             // If panel disabled or not a valid video page on activation
             console.log(
               `Side panel disabled or not a video page after onActivated, closing.`
             );
             window.close();
-          } else if (currentVideoId !== lastVideoId) {
-            // Only refresh if the video ID has changed
-            triggerViewRefresh("onActivated", currentVideoId);
           } else {
-            console.log(
-              `Tab activated, but video ID (${currentVideoId}) hasn't changed. No refresh needed.`
-            );
+            // *** CHANGE HERE: Always trigger refresh on activation if panel is enabled and URL is valid ***
+            console.log(`Tab activated and valid, triggering refresh.`);
+            triggerViewRefresh("onActivated", currentVideoId);
           }
         } catch (err) {
           console.error("Error during onActivated handling:", err);
-          // Decide how to handle error
         }
       }
     };
@@ -199,7 +200,7 @@ export function useTabViewRefreshKey(currentTabId, initialVideoId) {
       chrome.tabs.onActivated.removeListener(handleTabActivation);
       console.log(`Removed listeners for tab ${currentTabId}`);
     };
-    // triggerViewRefresh is stable due to useCallback([])
+    // Keep lastVideoId in dependencies for handleTabUpdate comparison
   }, [currentTabId, lastVideoId, triggerViewRefresh]);
 
   return viewKey;
